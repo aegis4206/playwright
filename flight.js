@@ -61,7 +61,12 @@ async function scrapeLotteryInfo(body, ws) {
         await page.waitForSelector('.is-active', callbackFn);
 
         await page.waitForSelector('.text-caption', callbackFn);
-        await page.waitForSelector('.text-primary:has-text(",")', callbackFn);
+        await page.waitForSelector('.text-primary:has-text(",")', {
+            timeout: 30000,
+            callback: async () => {
+                await page.waitForSelector('.text-primary:has-text("-")', callbackFn)
+            }
+        });
 
         // await page.waitForTimeout(2000);
 

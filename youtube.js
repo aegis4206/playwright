@@ -77,7 +77,6 @@ async function scrapeLotteryInfo() {
     }
 
     console.log('爬蟲完畢');
-    page.$eval()
     // 關閉瀏覽器
     await browser.close();
 }

@@ -1,20 +1,37 @@
-const { chromium } = require('playwright');
+const { chromium, firefox, webkit } = require('playwright');
 const moment = require('moment')
 
 async function scrapeLotteryInfo(body, ws) {
-    const browser = await chromium.launch();
-    const page = await browser.newPage();
+    const { goDate, returnDate, forward, back, choseBrowser, head } = JSON.parse(body);
+    console.log(goDate, returnDate, forward, back);
 
-    const callbackFn = {
+    const browser = await { chromium, firefox, webkit }[choseBrowser].launch({
+        headless: head,
+    });
+    const context = await browser.newContext({
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64)',
+    });
+    const page = await context.newPage();
+
+    // 設定重試次數
+    const retryCount = 5;
+    let count = 0;
+
+    // const callbackFn = {
+    //     timeout: 10000,
+    //     callback: async () => {
+    //         await browser.close();
+    //         throw new Error('Terminating inner function');
+    //     }
+    // };
+
+    const callbackFn = async (fn, target) => await fn(target, {
         timeout: 10000,
         callback: async () => {
             await browser.close();
             throw new Error('Terminating inner function');
         }
-    };
-
-    const { goDate, returnDate, forward, back } = JSON.parse(body);
-    console.log(goDate, returnDate, forward, back);
+    });
 
     let searchDate = moment(goDate).add(2, 'day').format('yyyy-MM-DD')
     const searchDateList = []
@@ -35,36 +52,37 @@ async function scrapeLotteryInfo(body, ws) {
         await page.goto(`https://booking.tigerairtw.com/zh-TW/index?type=roundTrip&outbound=${forward}-${back}&inbound=${back}-${forward}&departureDate=${d}&returnDate=${d}&adult=1&children=0&infant=0&promoCode=&currencyCode=TWD`);
         console.log(`https://booking.tigerairtw.com/zh-TW/index?type=roundTrip&outbound=${forward}-${back}&inbound=${back}-${forward}&departureDate=${d}&returnDate=${d}&adult=1&children=0&infant=0&promoCode=&currencyCode=TWD`)
         // 等待網頁載入完成
-        // await page.waitForLoadState('load');
+        await page.waitForLoadState('load');
         await page.waitForTimeout(2000);
-        if (page.url() === 'https://booking.tigerairtw.com/zh-TW/waiting-room') {
+
+        while (page.url() !== 'https://booking.tigerairtw.com/zh-TW/flight-result' && count !== retryCount) {
+            ++count
+            if (page.url() === 'https://booking.tigerairtw.com/zh-TW/waiting-room') {
+                console.log('進入waiting-room')
+
+            } else {
+                // await page.screenshot({
+                //     path: `./flight/${moment().format("yyyyMMDDhhmmss")}_snap.png`
+                // });
+                console.log('等待進入flight-result', page.url())
+                // const search = await page.$('.block:has-text("搜尋")');
+                // search && await page.click('.block:has-text("搜尋")');
+            }
             await page.waitForTimeout(5000);
         }
-        // const search = await page.$('.block:has-text("搜尋")');
-        // search && await page.click('.block:has-text("搜尋")');
 
-        await page.waitForURL('https://booking.tigerairtw.com/zh-TW/flight-result', {
-            timeout: 30000,
-            callback: async () => {
-                const search = await page.$('.block:has-text("搜尋")');
-                if (search) {
-                    await page.click('.block:has-text("搜尋")');
-                    await page.waitForURL('https://booking.tigerairtw.com/zh-TW/flight-result')
-                    return
-                }
-                await browser.close();
-                throw new Error('Terminating inner function');
-            }
-        });
-
+        console.log('進入flight-result')
+        await callbackFn(page.waitForURL, 'https://booking.tigerairtw.com/zh-TW/flight-result')
         // 等待列表加載完成
-        await page.waitForSelector('.is-active', callbackFn);
+        await callbackFn(page.waitForSelector, '.is-active')
 
-        await page.waitForSelector('.text-caption', callbackFn);
+        await callbackFn(page.waitForSelector, '.text-caption')
+
         await page.waitForSelector('.text-primary:has-text(",")', {
             timeout: 30000,
             callback: async () => {
-                await page.waitForSelector('.text-primary:has-text("-")', callbackFn)
+                await callbackFn(page.waitForSelector, '.text-primary:has-text("-")')
+
             }
         });
 

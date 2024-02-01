@@ -21,23 +21,29 @@ const corsOptions = {
 
 app.use(cors(corsOptions))
 
-wss.on('connection', (ws) => {
-    console.log("connected");
-
+wss.on('connection', (ws, req) => {
+    console.log(req.socket.remoteAddress, "connected");
+    console.log(wss.clients.size)
     ws.on('message', async (searchBody) => {
+        if (wss.clients.size > 1) return ws.send(JSON.stringify({
+            message: '其他使用者正在使用中'
+        }));
+
         const searchOption = searchBody.toString();
         console.log(searchOption)
         try {
             await scrapy.scrapeLotteryInfo(searchOption, ws)
         } catch {
             ws.send(JSON.stringify({
-                message: '伺服器錯誤'
+                message: '伺服器無回應或選擇日期無航班'
             }))
         }
     })
 
+
     ws.on('close', () => {
-        console.log("disconnected");
+        console.log(req.socket.remoteAddress, "disconnected");
+        console.log(wss.clients.size)
     })
 })
 

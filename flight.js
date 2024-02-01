@@ -17,21 +17,19 @@ async function scrapeLotteryInfo(body, ws) {
     const retryCount = 5;
     let count = 0;
 
-    // const callbackFn = {
-    //     timeout: 10000,
-    //     callback: async () => {
-    //         await browser.close();
-    //         throw new Error('Terminating inner function');
-    //     }
-    // };
-
-    const callbackFn = async (fn, target) => await fn(target, {
+    const callbackOptions = {
         timeout: 10000,
         callback: async () => {
             await browser.close();
             throw new Error('Terminating inner function');
         }
-    });
+    };
+
+    const callbackFn = {
+        waitForSelector: async (target) => await page.waitForSelector(target, callbackOptions),
+        waitForURL: async (target) => await page.waitForURL(target, callbackOptions)
+
+    }
 
     let searchDate = moment(goDate).add(2, 'day').format('yyyy-MM-DD')
     const searchDateList = []
@@ -72,25 +70,26 @@ async function scrapeLotteryInfo(body, ws) {
         }
 
         console.log('進入flight-result')
-        await callbackFn(page.waitForURL, 'https://booking.tigerairtw.com/zh-TW/flight-result')
+        await callbackFn.waitForURL('https://booking.tigerairtw.com/zh-TW/flight-result')
         // 等待列表加載完成
-        await callbackFn(page.waitForSelector, '.is-active')
+        await page.waitForTimeout(2000);
 
-        await callbackFn(page.waitForSelector, '.text-caption')
+        await callbackFn.waitForSelector('.is-active')
 
-        await page.waitForSelector('.text-primary:has-text(",")', {
+        await callbackFn.waitForSelector('.text-caption')
+
+        await page.waitForSelector('.text-caption:has-text(",")', {
             timeout: 30000,
             callback: async () => {
-                await callbackFn(page.waitForSelector, '.text-primary:has-text("-")')
+                await callbackFn.waitForSelector('.text-primary:has-text("-")')
 
             }
         });
 
-        // await page.waitForTimeout(2000);
 
         const date = await page.$$eval('.text-caption', items => {
             return items.map(item => {
-                const regex = /[\/,]/;
+                const regex = /[\-,\/]/;
                 const match = item.innerText.match(regex);
                 return match ? item.innerText : null
             });
